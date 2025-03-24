@@ -1,7 +1,7 @@
 
 
 class TrafficLight:
-    def __init__(self, intersection_id, cycle_time=60):
+    def __init__(self, intersection_id, cycle_time):
         """
         Initialize a traffic light at an intersection
         
@@ -13,6 +13,10 @@ class TrafficLight:
         self.cycle_time = cycle_time
         self.current_time = 0
         self.phases = []  # List of phases (green directions)
+        self.cycle_count = 0
+        print(f"Creating TrafficLight at {intersection_id} with cycle_time={cycle_time}")
+        if not isinstance(cycle_time, (int, float)) or cycle_time <= 0:
+            raise ValueError(f"Cycle time must be a positive number, got {cycle_time}")
     
     def add_phase(self, allowed_edges, duration):
         """
@@ -29,7 +33,14 @@ class TrafficLight:
     
     def update(self, time_step=1):
         """Update traffic light state based on current time"""
+        old_time = self.current_time
+        if self.cycle_time <= 0:
+            print(f"Error: Traffic light at {self.intersection_id} has cycle_time={self.cycle_time}")
+            raise ValueError(f"Invalid cycle_time: {self.cycle_time}")
         self.current_time = (self.current_time + time_step) % self.cycle_time
+        if old_time > self.current_time:
+            self.cycle_count += 1
+            print(f"Time {self.current_time}s: Traffic light at {self.intersection_id} completed cycle {self.cycle_count}")
     
     def is_green(self, edge):
         """Check if the given edge has a green light"""
@@ -67,3 +78,6 @@ class TrafficLightSystem:
         if start in self.traffic_lights:
             return self.traffic_lights[start].is_green(edge)
         return True  # No traffic light means always green
+
+    def get_cycle_counts(self):
+        return {id: light.cycle_count   for id, light in self.traffic_lights.items()}

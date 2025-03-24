@@ -5,13 +5,16 @@ import networkx as nx
 class TrafficGenerator:
     def __init__(self, city_graph, arrival_rate, simulation_time):
         self.city_graph = city_graph
-        self.arrival_rate = arrival_rate
-        self.simulation_time = simulation_time  # in minutes
+        self.arrival_rate = arrival_rate / 60
+        self.simulation_time = simulation_time
         self.vehicles = []
 
     def generate_vehicles(self):
         """Generate vehicles with random start and destination."""
         intersections = list(self.city_graph.graph.nodes)  # Get all available intersections
+
+        if len(intersections) < 2:
+            raise ValueError("City graph must have at least 2 intersections")
         
         for t in range(self.simulation_time):
             num_vehicles = np.random.poisson(self.arrival_rate)  # Poisson-distributed arrivals
@@ -27,9 +30,6 @@ class TrafficGenerator:
                         weight="travel_time")
                 except nx.NetworkXNoPath:
                     route = [start]
-
-                if not isinstance(route, list):
-                    route = [start, destination]
 
                 self.vehicles.append({
                     "id": len(self.vehicles) + 1, 

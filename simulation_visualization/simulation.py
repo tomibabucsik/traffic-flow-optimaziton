@@ -10,6 +10,7 @@ class TrafficSimulation:
         self.time_step = time_step  # in seconds
         self.simulation_time = 0  # Track total simulation time in seconds
         self.traffic_light_system = TrafficLightSystem()
+        self.traffic_light_cycles = 0
     
     def add_traffic_light_system(self, traffic_light_system):
         """Add a traffic light system to the simulation"""
@@ -19,6 +20,7 @@ class TrafficSimulation:
         """Move vehicles along their route based on road properties, congestion and traffic lights"""
         # Update traffic lights
         self.traffic_light_system.update(self.time_step)
+        self.traffic_light_cycles = sum(self.traffic_light_system.get_cycle_counts().values())
         
         # First, reset current flow counts on all edges
         for u, v in self.city_graph.edges():
@@ -34,11 +36,16 @@ class TrafficSimulation:
         for vehicle in self.vehicles:
             # Skip if vehicle hasn't entered yet
             if vehicle["entry_time"] > self.simulation_time:
+                if vehicle["entry_time"] == self.simulation_time:
+                    print(f"Time {self.simulation_time}s: Vehicle {vehicle['id']} entered at {vehicle['start']}")
                 continue
                 
             # Skip if vehicle has reached destination
             route = vehicle["route"]
             if vehicle["current_position"] == route[-1]:
+                if vehicle["current_position"] != vehicle.get("last_position", None):
+                    print(f"Time {self.simulation_time}s: Vehicle {vehicle['id']} completed trip at {route[-1]}")
+                    vehicle["last_position"] = vehicle["current_position"]
                 continue
                 
             # If vehicle is between nodes (on an edge)
@@ -61,9 +68,10 @@ class TrafficSimulation:
                 
                 # If finished traveling this edge
                 if vehicle["travel_time_remaining"] <= 0:
+                    print(f"Time {self.simulation_time}s: Vehicle {vehicle['id']} reached {end}")
                     vehicle["current_position"] = end
                     vehicle["current_edge"] = None
-                    vehicle["progress_on_edge"] = 0
+                    vehicle["progress_on_edge"] = 0 
                 else:
                     # Update progress (for visualization)
                     total_time = road["travel_time"] * congestion_factor
@@ -95,7 +103,11 @@ class TrafficSimulation:
                         vehicle["current_edge"] = edge
                         vehicle["travel_time_remaining"] = road["travel_time"] * congestion_factor
                         vehicle["progress_on_edge"] = 0
+                        print(f"Time {self.simulation_time}s: Vehicle {vehicle['id']} started on {edge}")
                     # If red light, vehicle stays at current node
+                    else:
+                        if self.simulation_time % 5 == 0:
+                            print(f"Time {self.simulation_time}s: Vehicle {vehicle['id']} waiting at {current_node}")
     
     def get_traffic_density(self):
         """Return traffic density information for each edge"""
@@ -164,10 +176,5 @@ class TrafficSimulation:
                 'density': self.get_traffic_density(),
                 'traffic_lights': self.get_traffic_light_states()
             })
-            
-            print(f"Time {t}s: {vehicles_in_transit} vehicles in transit, "
-                  f"Avg travel time: {avg_travel_time:.1f}s")
-            
-            time.sleep(self.time_step)  # Simulate real-time delay
             
         return results

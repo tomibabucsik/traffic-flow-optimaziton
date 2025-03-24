@@ -1,197 +1,66 @@
+from matplotlib.collections import LineCollection
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 import networkx as nx
 import numpy as np
-import matplotlib.animation as animation
+import os
+        
 
-def plot_traffic_snapshot(city_graph, vehicles, simulation=None):
-    """Plot road network with vehicle distribution and traffic density"""
-    G = city_graph.get_graph()
-    pos = nx.get_node_attributes(G, 'pos')
+def generate_traffic_report(simulation, vehicles, duration, output_file=None):
+    """Generate a comprehensive traffic report with statistics and visualizations"""
+    total_vehicles = len(vehicles)
+    completed_trips = sum(1 for v in vehicles if v.get("current_position") == v["route"][-1])
+    avg_travel_time = sum(
+        simulation.simulation_time - v["entry_time"] for v in vehicles 
+        if v.get("current_position") == v["route"][-1]
+    ) / max(1, completed_trips)
     
-    plt.figure(figsize=(12, 10))
+    avg_speeds = []
+    for v in vehicles:
+        if v.get("current_position") == v["route"][-1] and v.get("entry_time", 0) < simulation.simulation_time:
+            travel_time = simulation.simulation_time - v["entry_time"]
+            if travel_time > 0:
+                distance = sum(
+                    simulation.city_graph[u][v]["length"] 
+                    for u, v in zip(v["route"][:-1], v["route"][1:])
+                )
+                avg_speeds.append(distance / travel_time)
+    avg_speed = sum(avg_speeds) / max(1, len(avg_speeds)) if avg_speeds else 0
     
-    # Calculate edge colors based on congestion
-    edge_colors = []
-    edge_widths = []
+    report = [
+        "================================",
+        "TRAFFIC SIMULATION REPORT",
+        "================================",
+        f"Simulation duration: {duration} seconds",
+        f"Total vehicles: {total_vehicles}",
+        f"Completed trips: {completed_trips} ({completed_trips/max(1, total_vehicles)*100:.1f}%)",
+        f"Vehicles still in transit: {total_vehicles - completed_trips}",
+        f"Average travel time: {avg_travel_time:.2f} seconds",
+        f"Average speed: {avg_speed:.2f} meters/second",
+        f"Traffic light cycles: {simulation.traffic_light_cycles}",
+        "",
+        "ROUTE ANALYSIS",
+        "--------------------------------"
+    ]
     
-    for u, v in G.edges():
-        # Calculate congestion ratio
-        flow = G[u][v]['current_flow']
-        capacity = G[u][v]['capacity']
-        ratio = flow / capacity if capacity > 0 else 0
-        
-        # Green (low traffic) to red (high traffic) color gradient
-        if ratio < 0.5:
-            color = (0, 1, 0)  # Green
-        elif ratio < 0.8:
-            color = (1, 1, 0)  # Yellow
-        else:
-            color = (1, 0, 0)  # Red
-            
-        edge_colors.append(color)
-        edge_widths.append(1 + 2 * G[u][v]['lanes'])  # Width based on lanes
-    
-    # Draw road network
-    nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=300)
-    nx.draw_networkx_labels(G, pos)
-    nx.draw_networkx_edges(G, pos, edge_color=edge_colors, width=edge_widths, arrowsize=15)
-    
-    # Draw vehicles on edges (between nodes)
+    route_counts = {}
     for vehicle in vehicles:
-        if vehicle["current_edge"] and vehicle["progress_on_edge"] > 0:
-            start, end = vehicle["current_edge"]
-            progress = vehicle["progress_on_edge"]
-            
-            # Interpolate position along the edge
-            start_pos = np.array(pos[start])
-            end_pos = np.array(pos[end])
-            vehicle_pos = start_pos + progress * (end_pos - start_pos)
-            
-            plt.plot(vehicle_pos[0], vehicle_pos[1], 'ko', markersize=5)
+        if "route" in vehicle:
+            route_key = f"{vehicle['route'][0]} → {vehicle['route'][-1]}"
+            route_counts[route_key] = route_counts.get(route_key, 0) + 1
     
-    # Count vehicles per node
-    vehicle_counts = {node: 0 for node in G.nodes}
-    for vehicle in vehicles:
-        if vehicle["current_edge"] is None:  # Only count vehicles at nodes
-            vehicle_counts[vehicle["current_position"]] += 1
+    for route, count in sorted(route_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+        report.append(f"{route}: {count} vehicles ({count/total_vehicles*100:.1f}%)")
     
-    # Annotate vehicle count
-    for node, count in vehicle_counts.items():
-        if count > 0:
-            plt.text(pos[node][0], pos[node][1] + 0.05, str(count), fontsize=12, ha='center')
+    report_str = "\n".join(report)
+    print(report_str)
     
-    # Add legend for congestion levels
-    plt.plot([], [], color='green', linewidth=3, label='Low traffic')
-    plt.plot([], [], color='yellow', linewidth=3, label='Medium traffic')
-    plt.plot([], [], color='red', linewidth=3, label='High traffic')
-    plt.legend()
+    if output_file:
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(report_str)
+            print(f"Report saved to {output_file}")
+        except IOError as e:
+            print(f"Failed to save report: {e}")
     
-    # Add simulation stats if available
-    if simulation:
-        stats_text = (
-            f"Simulation time: {simulation.simulation_time}s\n"
-            f"Vehicles in transit: {len([v for v in vehicles if v['current_position'] != v['route'][-1]])}\n"
-            f"Avg travel time: {simulation.get_average_travel_time():.1f}s"
-        )
-        plt.figtext(0.02, 0.02, stats_text, bbox=dict(facecolor='white', alpha=0.5))
-    
-    plt.title("Traffic Simulation")
-    plt.axis('off')
-    plt.tight_layout()
-    plt.show()
-
-def create_traffic_animation(city_graph, simulation, vehicles, frames=100, interval=100):
-    """Create an animation of traffic flow"""
-    import numpy as np
-    import networkx as nx
-    from matplotlib import animation
-    
-    G = city_graph.get_graph()
-    pos = nx.get_node_attributes(G, 'pos')
-    
-    fig, ax = plt.subplots(figsize=(12, 10))
-    
-    # Initialize plot elements
-    nodes = nx.draw_networkx_nodes(G, pos, node_color='lightblue', node_size=300, ax=ax)
-    nx.draw_networkx_labels(G, pos, ax=ax)
-    
-    # Draw edges - but store the edges differently
-    edge_colors = ['green'] * len(G.edges())
-    edge_widths = [1 + 2 * G[u][v]['lanes'] for u, v in G.edges()]
-    
-    # Create the edge collection - store as a global variable for the closure
-    edges = nx.draw_networkx_edges(
-        G, pos, 
-        edge_color=edge_colors, 
-        width=edge_widths,
-        arrowsize=15,
-        ax=ax
-    )
-    
-    # Vehicle scatter plot (initially empty)
-    vehicle_scatter = ax.scatter([], [], c='black', s=30)
-    
-    # Text for stats
-    stats_text = ax.text(0.02, 0.02, "", transform=ax.transAxes,
-                         bbox=dict(facecolor='white', alpha=0.5))
-    
-    # Store edge list for updates
-    edge_list = list(G.edges())
-    
-    def update(frame):
-        nonlocal edges  # Use the outer scope variable
-        
-        # Move vehicles
-        simulation.move_vehicles()
-        
-        # Update edge colors based on congestion
-        new_edge_colors = []
-        for u, v in edge_list:
-            flow = G[u][v].get('current_flow', 0)
-            capacity = G[u][v].get('capacity', 1)
-            ratio = flow / capacity if capacity > 0 else 0
-            
-            if ratio < 0.5:
-                color = 'green'
-            elif ratio < 0.8:
-                color = 'yellow'
-            else:
-                color = 'red'
-                
-            new_edge_colors.append(color)
-        
-        # Remove old edges and redraw with new colors
-        if edges:
-            edges.remove()
-        edges = nx.draw_networkx_edges(
-            G, pos, 
-            edge_color=new_edge_colors,
-            width=edge_widths,
-            arrowsize=15,
-            ax=ax
-        )
-        
-        # Update vehicle positions
-        vehicle_x = []
-        vehicle_y = []
-        
-        for vehicle in vehicles:
-            if vehicle.get("current_edge") and vehicle.get("progress_on_edge", 0) > 0:
-                start, end = vehicle["current_edge"]
-                progress = vehicle["progress_on_edge"]
-                
-                # Interpolate position along the edge
-                start_pos = np.array(pos[start])
-                end_pos = np.array(pos[end])
-                vehicle_pos = start_pos + progress * (end_pos - start_pos)
-                
-                vehicle_x.append(vehicle_pos[0])
-                vehicle_y.append(vehicle_pos[1])
-        
-        # Update vehicle scatter plot
-        if vehicle_x and vehicle_y:  # Only update if there are vehicles to show
-            vehicle_scatter.set_offsets(np.column_stack([vehicle_x, vehicle_y]))
-        
-        # Update stats text
-        vehicles_in_transit = len([v for v in vehicles 
-                               if v.get('current_position') != v.get('route', [])[-1]])
-        avg_travel_time = simulation.get_average_travel_time()
-        stats = (f"Time: {simulation.simulation_time}s\n"
-                f"Vehicles in transit: {vehicles_in_transit}\n"
-                f"Avg travel time: {avg_travel_time:.1f}s")
-        stats_text.set_text(stats)
-        
-        # Increment simulation time
-        simulation.simulation_time += 1
-        
-        return [edges, vehicle_scatter, stats_text]
-    
-    ani = animation.FuncAnimation(fig, update, frames=frames, 
-                                 interval=interval, blit=True)
-    
-    plt.title("Traffic Simulation")
-    plt.axis('off')
-    plt.tight_layout()
-    
-    return ani
+    return report_str
