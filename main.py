@@ -1,8 +1,6 @@
 import time
 import os
 
-from matplotlib import animation, pyplot as plt
-import numpy as np
 from city_modeling.networkx_graph import CityGraph
 from traffic_generation.poisson_traffic import TrafficGenerator
 from simulation_visualization.simulation import TrafficSimulation
@@ -16,7 +14,7 @@ config = {
     "speed_limit": 50,   # km/h
     "lanes": 2,
     "simulation_time": 180,  # seconds
-    "arrival_rate": 5,      # vehicles/minute
+    "arrival_rate": 15,      # vehicles/minute
     "traffic_light_cycle": 60,  # seconds
     "phase_duration": 30,       # seconds
     "time_step": 1            # seconds
@@ -105,45 +103,8 @@ def main():
     # Run simulation
     simulation = TrafficSimulation(city, vehicles)
     simulation.add_traffic_light_system(traffic_light_system)
-    
-    for t in range(config["simulation_time"]):
-        simulation.simulation_time = t
-        simulation.move_vehicles()
-        
-        # Collect statistics
-        vehicles_in_transit = len([v for v in vehicles if v['current_position'] != v['route'][-1]])
-        avg_travel_time = simulation.get_average_travel_time()
-        
-        # Detailed output every 5 seconds
-        if t % 5 == 0 or t == config["simulation_time"] - 1:
-            print(f"\n⏳ Time {t}s:")
-            print(f"  Vehicles in transit: {vehicles_in_transit}")
-            print(f"  Completed trips: {len(vehicles) - vehicles_in_transit}")
-            print(f"  Avg travel time: {avg_travel_time:.1f}s")
-            
-            # Traffic density
-            density = simulation.get_traffic_density()
-            congested_edges = [(edge, data['ratio']) for edge, data in density.items() if data['ratio'] > 0.8]
-            if congested_edges:
-                print("  Congested edges (flow/capacity > 0.8):")
-                for edge, ratio in congested_edges[:3]:  # Limit to top 3
-                    print(f"    {edge}: {ratio:.2f}")
-            
-            # Traffic light states
-            light_states = simulation.get_traffic_light_states()
-            print("  Traffic light states:")
-            for node, allowed in light_states.items():
-                state = "Green" if allowed else "Red"
-                allowed_str = ", ".join(f"{e[0]}→{e[1]}" for e in allowed) if allowed else "None"
-                print(f"    Node {node}: {state} ({allowed_str})")
-            
-            # Vehicle sample (first 3 in transit)
-            in_transit = [v for v in vehicles if v['entry_time'] <= t and v['current_position'] != v['route'][-1]]
-            if in_transit:
-                print("  Sample of vehicles in transit (up to 3):")
-                for v in in_transit[:3]:
-                    pos = v['current_position'] if not v['current_edge'] else f"on {v['current_edge']}"
-                    print(f"    ID {v['id']}: At {pos}, Route {v['route'][0]}→{v['route'][-1]}")
+
+    results = simulation.run_simulation(config["simulation_time"])
 
     print("✅ Simulation Complete ✅")
 
