@@ -1,4 +1,4 @@
-
+import math
 
 class TrafficLight:
     def __init__(self, intersection_id, cycle_time):
@@ -40,7 +40,7 @@ class TrafficLight:
         self.current_time = (self.current_time + time_step) % self.cycle_time
         if old_time > self.current_time:
             self.cycle_count += 1
-            print(f"Time {self.current_time}s: Traffic light at {self.intersection_id} completed cycle {self.cycle_count}")
+            print(f"INFO: Traffic light at {self.intersection_id} completed cycle {self.cycle_count}.")
     
     def is_green(self, edge):
         """Check if the given edge has a green light"""
@@ -64,6 +64,15 @@ class TrafficLightSystem:
     
     def add_traffic_light(self, traffic_light):
         """Add a traffic light to the system"""
+        total_phase_duration = sum(phase['duration'] for phase in traffic_light.phases)
+
+        if not math.isclose(total_phase_duration, traffic_light.cycle_time):
+            raise ValueError(
+                f"Traffic light {traffic_light.intersection_id}: "
+                f"Sum of phase durations ({total_phase_duration}s) does not equal "
+                f"the total cycle time ({traffic_light.cycle_time}s)."
+            )
+
         self.traffic_lights[traffic_light.intersection_id] = traffic_light
     
     def update(self, time_step=1):

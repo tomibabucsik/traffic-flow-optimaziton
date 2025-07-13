@@ -64,3 +64,69 @@ def generate_traffic_report(simulation, vehicles, duration, output_file=None):
             print(f"Failed to save report: {e}")
     
     return report_str
+
+def generate_performance_report(vehicles, simulation_time, output_file=None):
+    """
+    Generated a detailed performance report with key traffic metrics
+    """
+
+    completed_vehicles = [v for v in vehicles if v["completion_time"] != -1]
+    ongoing_vehicles = [v for v in vehicles if v["completion_time"] == -1]
+
+    if not completed_vehicles:
+        print("warning: No vehicles completed their trips")
+        return
+    
+    # -- Calculate KPIs --
+
+    # 1. Travel Times
+    travel_times = [v['completion_time'] - v['entry_time'] for v in completed_vehicles]
+    avg_travel_time = np.mean(travel_times) if travel_times else 0
+
+    # 2. Wait Times
+    wait_times = [v['total_wait_time'] for v in completed_vehicles]
+    avg_wait_time = np.mean(wait_times) if wait_times else 0
+    wait_time_ratio = (avg_wait_time / avg_travel_time) * 100 if avg_travel_time > 0 else 0
+
+    # 3. Throughput
+    throughput_vpm = len(completed_vehicles) / (simulation_time / 60.0)
+
+    # 4. Total System Travel Time (TSTT)
+    tstt_completed = sum(travel_times)
+    tstt_ongoing = sum([(simulation_time - v['entry_time']) for v in ongoing_vehicles])
+    total_system_travel_time = tstt_completed + tstt_ongoing
+
+    # -- Generate Report String --
+
+    report = f"""
+    =========================================
+    Traffic Simulation Performance Report
+    =========================================
+    
+    Simulation Duration: {simulation_time:.2f} seconds
+    
+    Vehicle Statistics:
+    -------------------
+    Total Vehicles Generated: {len(vehicles)}
+    Vehicles Completed Trip:  {len(completed_vehicles)}
+    Vehicles In-Transit:      {len(ongoing_vehicles)}
+    
+    Performance Metrics:
+    --------------------
+    Throughput:               {throughput_vpm:.2f} vehicles/minute
+    
+    Average Travel Time:      {avg_travel_time:.2f} seconds
+    Average Wait Time:        {avg_wait_time:.2f} seconds
+    Percentage of Time Spent Waiting: {wait_time_ratio:.2f}%
+    
+    Total System Travel Time (TSTT): {total_system_travel_time:.2f} vehicle-seconds
+    
+    =========================================
+    """
+
+    print(report)
+
+    if output_file:
+        with open(output_file, 'w') as f:
+            f.write(report)
+        print(f"Report saved to {output_file}")
