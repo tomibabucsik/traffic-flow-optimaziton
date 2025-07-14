@@ -1,0 +1,3 @@
+timestamp,scale_factor,completed_vehicles,avg_travel_time,avg_wait_time,throughput_vpm
+2025-07-14 19:04:50,1.0,140,38.19,12.56,46.67
+2025-07-14 19:06:46,3.0,410,46.64,23.93,136.67

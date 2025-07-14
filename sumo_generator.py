@@ -31,7 +31,7 @@ def generate_edge_file(file_name, city_graph):
         f.write(_prettify(edges))
     print(f"✅ Generated edge file: {file_name}")
 
-def generate_route_file(file_name, edge_nodes, simulation_time, arrival_rate):
+def generate_route_file(file_name, edge_nodes, simulation_time, arrival_rate, scale=1.0):
     """Generates the SUMO .rou.xml file using traffic flows."""
     routes = ET.Element('routes')
     ET.SubElement(routes, 'vType', id="car", accel="2.6", decel="4.5", sigma="0.5", length="5", maxSpeed="70")
@@ -45,10 +45,12 @@ def generate_route_file(file_name, edge_nodes, simulation_time, arrival_rate):
     for i in range(num_flows):
         origin_node, dest_node = random.sample(edge_nodes, 2)
         flow_id = f"flow_{i}"
+
+        scaled_vehs_per_hour = arrival_rate * 60 / num_flows * scale
         
         # Define the flow
         ET.SubElement(routes, 'flow', id=flow_id, type="car", begin="0", end=str(simulation_time), 
-                      vehsPerHour=str(arrival_rate * 60 / num_flows),  # Distribute arrival rate over flows
+                      vehsPerHour=str(scaled_vehs_per_hour),
                       fromJunction=str(origin_node), toJunction=str(dest_node))
 
     with open(file_name, "w") as f:
