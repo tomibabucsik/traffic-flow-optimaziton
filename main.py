@@ -2,7 +2,7 @@
 
 import argparse
 from config import CONFIG
-from simulation.run import run_fixed_experiment, run_viewer
+from simulation.run import run_fixed_experiment, run_viewer, run_ga_experiment
 
 def main():
     parser = argparse.ArgumentParser(description="Run Traffic Flow Optimization Experiments.")
@@ -24,15 +24,13 @@ def main():
     
     args = parser.parse_args()
 
-    print(f"🚀 Starting experiment: Run Type='{args.run_type}', Traffic Scale={args.scale}x")
+    print(f"Starting experiment: Run Type='{args.run_type}', Traffic Scale={args.scale}x")
 
     if args.run_type == "fixed":
         run_fixed_experiment(CONFIG, args.scale, args.run_type)
     
     elif args.run_type == "optimized":
-        print("Optimization logic not yet implemented.")
-        # GA functions will be called here:
-        # run_ga_experiment(CONFIG, args.scale, args.run_type)
+        run_ga_experiment(CONFIG, args.scale, args.run_type)
     
     elif args.run_type == "view":
         run_viewer(CONFIG, args.scale)

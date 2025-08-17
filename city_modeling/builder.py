@@ -1,0 +1,34 @@
+from .networkx_graph import CityGraph
+
+# This is the exact same function you had in main.py
+def setup_grid_city(rows=3, cols=3, road_length=100, speed_limit=50, lanes=2):
+    """Generate a grid-based city layout with dynamic intersection types."""
+    city = CityGraph()
+    node_positions = {}
+    node_id = 1
+    for i in range(rows):
+        for j in range(cols):
+            is_internal = (0 < i < rows - 1) and (0 < j < cols - 1)
+            node_type = "traffic_light" if is_internal else "priority"
+            
+            node_positions[(i, j)] = node_id
+            city.add_intersection(node_id, (i * road_length, j * road_length))
+            city.graph.nodes[node_id]['type'] = node_type
+            node_id += 1
+
+    for (i, j), node_id in node_positions.items():
+        if j < cols - 1:
+            right_node = node_positions[(i, j + 1)]
+            city.add_road(node_id, right_node, length=road_length, speed_limit=speed_limit, lanes=lanes)
+            city.add_road(right_node, node_id, length=road_length, speed_limit=speed_limit, lanes=lanes)
+        if i < rows - 1:
+            down_node = node_positions[(i + 1, j)]
+            city.add_road(node_id, down_node, length=road_length, speed_limit=speed_limit, lanes=lanes)
+            city.add_road(down_node, node_id, length=road_length, speed_limit=speed_limit, lanes=lanes)
+    
+    edge_nodes = []
+    for (i, j), node_id in node_positions.items():
+        if i == 0 or i == rows - 1 or j == 0 or j == cols - 1:
+            edge_nodes.append(node_id)
+            
+    return city, node_positions, edge_nodes

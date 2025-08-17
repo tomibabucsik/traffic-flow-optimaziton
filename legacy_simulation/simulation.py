@@ -1,11 +1,8 @@
 import time
-import pygame
 import math
 from city_modeling.networkx_graph import CityGraph
 from traffic_generation.poisson_traffic import TrafficGenerator
 from traffic_lights.traffic_lights import TrafficLightSystem
-
-pygame.init()
 
 class TrafficSimulation:
     def __init__(self, city_graph, vehicles, config, visualize=False):

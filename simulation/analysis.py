@@ -50,4 +50,4 @@ def log_results(metrics, scale_factor, run_type):
         }
         writer.writerow(row)
 
-    print(f"✅ Results logged to {RESULTS_CSV}")
+    print(f"Results logged to {RESULTS_CSV}")
