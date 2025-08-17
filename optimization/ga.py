@@ -10,11 +10,14 @@ import traci
 # --- GA Configuration ---
 POPULATION_SIZE = 10
 N_GENERATIONS = 20
-MUTATION_RATE = 0.1
+MUTATION_RATE = 0.3
 CROSSOVER_RATE = 0.8
 # Range for green light durations (e.g., 10 to 60 seconds)
 GENE_MIN = 10
 GENE_MAX = 60
+# Weights
+W_WAIT_TIME = 0.5
+W_TRAVEL_TIME = 0.5
 # ------------------------
 
 class GAOptimizer:
@@ -25,7 +28,7 @@ class GAOptimizer:
     for all phases of all traffic-light-controlled intersections.
     """
 
-    def __init__(self, config, scale, run_type, sumo_dir, net_file, route_file, tripinfo_output):
+    def __init__(self, config, scale, run_type, sumo_dir, net_file, route_file, tripinfo_output, baseline_metrics):
         self.config = config
         self.scale = scale
         self.run_type = run_type
@@ -33,6 +36,7 @@ class GAOptimizer:
         self.net_file = net_file
         self.route_file = route_file
         self.tripinfo_output = tripinfo_output
+        self.baseline_metrics = baseline_metrics
 
         # Identify which intersections have traffic lights (hardcoded from your generator)
         self.tls_intersections = [6, 7, 10, 11]
@@ -46,46 +50,22 @@ class GAOptimizer:
         return [random.randint(GENE_MIN, GENE_MAX) for _ in range(self.chromosome_length)]
 
     def _run_simulation_for_fitness(self, individual):
-        """Runs a SUMO simulation and returns the fitness score."""
+        """
+        Runs a SUMO simulation via a helper method and returns a multi-objective fitness score.
+        """
+        current_metrics = self.get_metrics_for_individual(individual)
         
-        # 1. Generate the traffic light file for this specific individual
-        tls_file = os.path.join(self.sumo_dir, "city.add.xml")
-        generate_tls_file(
-            tls_file, 
-            self.tls_intersections, 
-            individual, 
-            self.config["yellow_phase_duration"],
-            self.config["all_red_duration"]
-        )
+        if not current_metrics or current_metrics['completed_vehicles'] == 0:
+            return 0
 
-        # 2. Generate the SUMO config to use this TLS file
-        config_file = os.path.join(self.sumo_dir, "city.sumocfg")
-        generate_sumo_config(config_file, self.net_file, self.route_file, additional_files=[tls_file])
-
-        # 3. Run the simulation
-        sumo_cmd = ["sumo", "-c", config_file, 
-            "--tripinfo-output", self.tripinfo_output,
-            "--junction-taz",
-            "--no-warnings", "true",
-            "--no-step-log", "true"]
+        # 1. Normalize: Calculate improvement over baseline (higher is better)
+        # We add a small epsilon (1e-6) to avoid division by zero
+        wait_improvement = (self.baseline_metrics['total_system_wait_time'] - current_metrics['total_system_wait_time']) / (self.baseline_metrics['total_system_wait_time'] + 1e-6)
         
-        traci.start(sumo_cmd)
+        travel_improvement = (self.baseline_metrics['avg_travel_time'] - current_metrics['avg_travel_time']) / (self.baseline_metrics['avg_travel_time'] + 1e-6)
 
-        for tls_id in self.tls_intersections:
-            traci.trafficlight.setProgram(str(tls_id), "1")
-
-        while traci.simulation.getMinExpectedNumber() > 0:
-            traci.simulationStep()
-        traci.close()
-
-        # 4. Calculate fitness from results
-        results = parse_tripinfo(self.tripinfo_output, self.config["simulation_time"])
-        if not results or results['completed_vehicles'] == 0:
-            return 0  # Penalize solutions with no completed trips
-
-        # Fitness is the inverse of total wait time (we want to minimize wait time)
-        total_wait_time = results.get("total_system_wait_time", float('inf'))
-        fitness = 1.0 / (1.0 + total_wait_time)
+        # 2. Apply Weights: Combine the improvements into a single score
+        fitness = 1.0 + (W_WAIT_TIME * wait_improvement) + (W_TRAVEL_TIME * travel_improvement)
         
         return fitness
 

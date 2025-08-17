@@ -5,7 +5,7 @@ import csv
 from datetime import datetime
 import xml.etree.ElementTree as ET
 
-RESULTS_CSV = "results.csv"
+RESULTS_CSV = "results/results.csv"
 
 def parse_tripinfo(tripinfo_file, simulation_time):
     """Parses tripinfo.xml and returns a dictionary of metrics."""

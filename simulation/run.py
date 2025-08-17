@@ -115,6 +115,9 @@ def run_ga_experiment(config, scale, run_type):
     if os.path.exists(SUMO_DIR):
         shutil.rmtree(SUMO_DIR)
     # --- 1. Setup Common Environment Files (once) ---
+    if 'SUMO_HOME' not in os.environ:
+        sys.exit("Please declare environment variable 'SUMO_HOME'")
+
     print("\nSetting up base environment for GA...")
     os.makedirs(SUMO_DIR, exist_ok=True)
     city, _, edge_nodes = setup_grid_city(
@@ -137,11 +140,44 @@ def run_ga_experiment(config, scale, run_type):
         "netconvert", "--node-files", node_file, "--edge-files", edge_file, "-o", net_file
     ], check=True)
 
-    # --- 2. Initialize and Run the GA Optimizer ---
-    if 'SUMO_HOME' not in os.environ:
-        sys.exit("Please declare environment variable 'SUMO_HOME'")
-        
-    optimizer = GAOptimizer(config, scale, run_type, SUMO_DIR, net_file, route_file, tripinfo_output)
+    print("\nRunning a baseline simulation with default timings...")
+    
+    # Generate a config file WITHOUT the GA's additional file
+    base_config_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.sumocfg")
+    generate_sumo_config(base_config_file, net_file, route_file)
+
+    # Build the SUMO command for the baseline run
+    base_sumo_cmd = ["sumo", "-c", base_config_file,
+                     "--tripinfo-output", tripinfo_output,
+                     "--junction-taz",
+                     "--no-warnings", "true",
+                     "--no-step-log", "true"]
+
+    # Run the baseline simulation
+    traci.start(base_sumo_cmd)
+    while traci.simulation.getMinExpectedNumber() > 0:
+        traci.simulationStep()
+    traci.close()
+
+    # Get the baseline metrics
+    baseline_metrics = parse_tripinfo(tripinfo_output, config["simulation_time"])
+    if not baseline_metrics:
+        sys.exit("Error: Baseline simulation failed to produce results.")
+    
+    print(f"  - Baseline Wait Time: {baseline_metrics['total_system_wait_time']:.2f}")
+    print(f"  - Baseline Travel Time: {baseline_metrics['avg_travel_time']:.2f}")
+
+    # --- 2. Initialize and Run the GA Optimizer ---        
+    optimizer = GAOptimizer(
+        config=config,
+        scale=scale,
+        run_type=run_type,
+        sumo_dir=SUMO_DIR,
+        net_file=net_file,
+        route_file=route_file,
+        tripinfo_output=tripinfo_output,
+        baseline_metrics=baseline_metrics
+    )
     best_chromosome = optimizer.run()
     
     print(f"\nRunning final simulation with best chromosome to log results...")
