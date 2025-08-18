@@ -32,3 +32,49 @@ def setup_grid_city(rows=3, cols=3, road_length=100, speed_limit=50, lanes=2):
             edge_nodes.append(node_id)
             
     return city, node_positions, edge_nodes
+
+def setup_arterial_road(main_road_length=5, cross_streets=3, road_length=500, speed_limit=70, lanes=3):
+    """
+    Generates a map with one long main arterial road and several smaller cross-streets.
+    """
+    city = CityGraph()
+    
+    # Create the main arterial road
+    main_nodes = []
+    for i in range(main_road_length):
+        node_id = i + 1
+        city.add_intersection(node_id, (i * road_length, 0))
+        city.graph.nodes[node_id]['type'] = "traffic_light" # All main intersections are signalized
+        main_nodes.append(node_id)
+    
+    # Add roads along the main artery
+    for i in range(len(main_nodes) - 1):
+        city.add_road(main_nodes[i], main_nodes[i+1], length=road_length, speed_limit=speed_limit, lanes=lanes)
+        city.add_road(main_nodes[i+1], main_nodes[i], length=road_length, speed_limit=speed_limit, lanes=lanes)
+
+    # Add cross-streets
+    node_id_counter = main_road_length + 1
+    edge_nodes = [main_nodes[0], main_nodes[-1]] # Start and end of artery are edge nodes
+    
+    # Attach cross-streets to the middle intersections of the main road
+    arterial_intersections = main_nodes[1:-1]
+    for i in range(cross_streets):
+        if i < len(arterial_intersections):
+            main_intersection = arterial_intersections[i]
+            
+            # Add nodes above and below the main road
+            north_node = node_id_counter
+            south_node = node_id_counter + 1
+            city.add_intersection(north_node, (city.graph.nodes[main_intersection]['pos'][0], road_length))
+            city.add_intersection(south_node, (city.graph.nodes[main_intersection]['pos'][0], -road_length))
+            
+            # Connect them to the main road
+            city.add_road(north_node, main_intersection, length=road_length, speed_limit=40, lanes=1)
+            city.add_road(main_intersection, north_node, length=road_length, speed_limit=40, lanes=1)
+            city.add_road(south_node, main_intersection, length=road_length, speed_limit=40, lanes=1)
+            city.add_road(main_intersection, south_node, length=road_length, speed_limit=40, lanes=1)
+            
+            edge_nodes.extend([north_node, south_node])
+            node_id_counter += 2
+            
+    return city, {}, edge_nodes

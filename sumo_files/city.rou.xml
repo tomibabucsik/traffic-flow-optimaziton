@@ -1,14 +1,14 @@
 <?xml version="1.0" ?>
 <routes>
     <vType id="car" accel="2.6" decel="4.5" sigma="0.5" length="5" maxSpeed="70"/>
-    <flow id="flow_0" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="9" toJunction="15"/>
-    <flow id="flow_1" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="5" toJunction="16"/>
-    <flow id="flow_2" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="5" toJunction="4"/>
-    <flow id="flow_3" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="2" toJunction="12"/>
-    <flow id="flow_4" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="12" toJunction="15"/>
-    <flow id="flow_5" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="5" toJunction="16"/>
-    <flow id="flow_6" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="2" toJunction="1"/>
-    <flow id="flow_7" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="3" toJunction="16"/>
-    <flow id="flow_8" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="15" toJunction="1"/>
-    <flow id="flow_9" type="car" begin="0" end="450" vehsPerHour="120.0" fromJunction="1" toJunction="16"/>
+    <flow id="flow_0" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="5" toJunction="9"/>
+    <flow id="flow_1" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="15" toJunction="5"/>
+    <flow id="flow_2" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="12" toJunction="3"/>
+    <flow id="flow_3" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="3" toJunction="12"/>
+    <flow id="flow_4" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="14" toJunction="15"/>
+    <flow id="flow_5" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="13" toJunction="4"/>
+    <flow id="flow_6" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="16" toJunction="9"/>
+    <flow id="flow_7" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="16" toJunction="2"/>
+    <flow id="flow_8" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="2" toJunction="3"/>
+    <flow id="flow_9" type="car" begin="0" end="450" vehsPerHour="180.0" fromJunction="1" toJunction="13"/>
 </routes>

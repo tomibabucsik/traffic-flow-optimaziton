@@ -26,12 +26,12 @@ def parse_tripinfo(tripinfo_file, simulation_time):
     }
     return metrics
 
-def log_results(metrics, scale_factor, run_type):
+def log_results(metrics, scale_factor, run_type, scenario_name):
     """Appends a row of results to the main CSV log file."""
     file_exists = os.path.isfile(RESULTS_CSV)
     
     with open(RESULTS_CSV, 'a', newline='') as f:
-        fieldnames = ['timestamp', 'run_type', 'scale_factor', 'completed_vehicles', 'avg_travel_time', 'avg_wait_time', 'throughput_vpm', 'total_system_wait_time']
+        fieldnames = ['timestamp', 'scenario_name', 'run_type', 'scale_factor', 'completed_vehicles', 'avg_travel_time', 'avg_wait_time', 'throughput_vpm', 'total_system_wait_time']
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         
         if not file_exists:
@@ -40,6 +40,7 @@ def log_results(metrics, scale_factor, run_type):
         # Prepare the data row
         row = {
             'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'scenario_name': scenario_name,
             'run_type': run_type,
             'scale_factor': scale_factor,
             'completed_vehicles': metrics['completed_vehicles'],

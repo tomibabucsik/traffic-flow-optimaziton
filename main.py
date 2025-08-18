@@ -2,7 +2,7 @@
 
 import argparse
 from config import CONFIG
-from simulation.run import run_fixed_experiment, run_viewer, run_ga_experiment
+from simulation.run import run_fixed_experiment, run_viewer, run_ga_experiment, run_adaptive_experiment
 
 def main():
     parser = argparse.ArgumentParser(description="Run Traffic Flow Optimization Experiments.")
@@ -11,7 +11,7 @@ def main():
         "--run-type", 
         type=str, 
         default="fixed", 
-        choices=["fixed", "optimized", "view"],
+        choices=["fixed", "optimized", "view", "adaptive"],
         help="Type of simulation to run"
     )
     
@@ -34,6 +34,9 @@ def main():
     
     elif args.run_type == "view":
         run_viewer(CONFIG, args.scale)
+    
+    elif args.run_type == "adaptive":
+        run_adaptive_experiment(CONFIG, args.scale, args.run_type)
 
 if __name__ == "__main__":
     main()

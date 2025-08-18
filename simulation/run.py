@@ -8,25 +8,29 @@ import traci
 import shutil
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from city_modeling.networkx_graph import CityGraph
-from legacy_simulation.main_pygame import setup_grid_city
+from city_modeling.builder import setup_grid_city, setup_arterial_road
 
 from .generator import (generate_node_file, generate_edge_file, 
                         generate_route_file, generate_sumo_config)
 from .analysis import parse_tripinfo, log_results
-
+from optimization.adaptive import AdaptiveTrafficManager
 
 SUMO_DIR = "sumo_files"
 NETWORK_NAME = "city"
+
+MAP_BUILDERS = {
+    "setup_grid_city": setup_grid_city,
+    "setup_arterial_road": setup_arterial_road,
+}
 
 def run_fixed_experiment(config, scale, run_type):
     """Sets up and runs a headless SUMO experiment."""
 
     # --- 1. Setup Environment (Re-introduced from previous script) ---
     os.makedirs(SUMO_DIR, exist_ok=True)
-    city, _, edge_nodes = setup_grid_city(
-        rows=config["grid_rows"], cols=config["grid_cols"]
-    )
+    map_builder_func = MAP_BUILDERS[config['map_builder']]
+    map_args = config['map_config']
+    city, _, edge_nodes = map_builder_func(**map_args)
     graph = city.get_graph()
     
     node_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.nod.xml")
@@ -73,15 +77,15 @@ def run_fixed_experiment(config, scale, run_type):
     print("\nAnalyzing Results...")
     results = parse_tripinfo(tripinfo_output, config["simulation_time"])
     if results:
-        log_results(results, scale, run_type)
+        log_results(results, scale, run_type, config.get('scenario_name', 'default'))
 
 def run_viewer(config, scale):
     """Generates all files and launches the SUMO GUI for interactive viewing."""
     # --- 1. Setup Environment (Same as the experiment runner) ---
     os.makedirs(SUMO_DIR, exist_ok=True)
-    city, _, edge_nodes = setup_grid_city(
-        rows=config["grid_rows"], cols=config["grid_cols"]
-    )
+    map_builder_func = MAP_BUILDERS[config['map_builder']]
+    map_args = config['map_config']
+    city, _, edge_nodes = map_builder_func(**map_args)
     graph = city.get_graph()
     
     node_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.nod.xml")
@@ -120,9 +124,9 @@ def run_ga_experiment(config, scale, run_type):
 
     print("\nSetting up base environment for GA...")
     os.makedirs(SUMO_DIR, exist_ok=True)
-    city, _, edge_nodes = setup_grid_city(
-        rows=config["grid_rows"], cols=config["grid_cols"]
-    )
+    map_builder_func = MAP_BUILDERS[config['map_builder']]
+    map_args = config['map_config']
+    city, _, edge_nodes = map_builder_func(**map_args)
     graph = city.get_graph()
     
     node_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.nod.xml")
@@ -186,8 +190,70 @@ def run_ga_experiment(config, scale, run_type):
         final_metrics = optimizer.get_metrics_for_individual(best_chromosome)
         
         if final_metrics:
-            log_results(final_metrics, scale, run_type)
+            log_results(final_metrics, scale, run_type, config.get('scenario_name', 'default'))
         else:
             print("Could not get final metrics. Results not logged.")
     else:
         print("GA did not produce a best chromosome. Results not logged.")
+
+def run_adaptive_experiment(config, scale, run_type):
+    """
+    Sets up and runs a SUMO experiment with the V2X adaptive traffic light logic.
+    """
+    # --- 1. Setup Environment ---
+    print("\nSetting up environment for Adaptive run...")
+    if os.path.exists(SUMO_DIR):
+        shutil.rmtree(SUMO_DIR)
+    os.makedirs(SUMO_DIR, exist_ok=True)
+    
+    map_builder_func = MAP_BUILDERS[config['map_builder']]
+    map_args = config['map_config']
+    city, _, edge_nodes = map_builder_func(**map_args)
+    graph = city.get_graph()
+    
+    node_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.nod.xml")
+    edge_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.edg.xml")
+    net_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.net.xml")
+    route_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.rou.xml")
+    config_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.sumocfg")
+    tripinfo_output = os.path.join(SUMO_DIR, "tripinfo.xml")
+
+    generate_node_file(node_file, graph)
+    generate_edge_file(edge_file, graph)
+    generate_route_file(
+        route_file, edge_nodes, config["simulation_time"], config["arrival_rate"], scale=scale
+    )
+    subprocess.run(["netconvert", "--node-files", node_file, "--edge-files", edge_file, "-o", net_file], check=True)
+    generate_sumo_config(config_file, net_file, route_file)
+    print("✅ Environment created.")
+
+    # --- 2. Run Adaptive Simulation ---
+    print(f"\nRunning Adaptive V2X SUMO Experiment...")
+    if 'SUMO_HOME' not in os.environ:
+        sys.exit("Please declare environment variable 'SUMO_HOME'")
+    
+    sumo_cmd = ["sumo", "-c", config_file, 
+                "--tripinfo-output", tripinfo_output,
+                "--junction-taz",
+                "--no-warnings", "true",
+                "--no-step-log", "true"]
+
+    traci.start(sumo_cmd)
+    
+    # Initialize the adaptive manager
+    tls_ids = traci.trafficlight.getIDList()
+    adaptive_manager = AdaptiveTrafficManager(tls_ids, config)
+    
+    # Main simulation loop
+    while traci.simulation.getMinExpectedNumber() > 0:
+        traci.simulationStep()
+        adaptive_manager.step()
+
+    traci.close()
+    print("Simulation Finished.")
+
+    # --- 3. Analyze and Log Results ---
+    print("\nAnalyzing and logging results...")
+    results = parse_tripinfo(tripinfo_output, config["simulation_time"])
+    if results:
+        log_results(results, scale, run_type, config.get('scenario_name', 'default'))
