@@ -5,8 +5,7 @@ CONFIG = {
     "road_length": 500,
     "speed_limit": 50,
     "lanes": 2,
-    "simulation_time": 450,
-    "arrival_rate": 5,         # Base arrival rate (vehicles/minute)
+    "arrival_rate": 5,
     "traffic_light_cycle": 60,
     "yellow_phase_duration": 3,
     "all_red_duration": 2,

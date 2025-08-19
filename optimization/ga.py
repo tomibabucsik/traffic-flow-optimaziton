@@ -28,7 +28,7 @@ class GAOptimizer:
     for all phases of all traffic-light-controlled intersections.
     """
 
-    def __init__(self, config, scale, run_type, sumo_dir, net_file, route_file, tripinfo_output, baseline_metrics):
+    def __init__(self, config, scale, run_type, sumo_dir, net_file, route_file, tripinfo_output, baseline_metrics, tls_ids):
         self.config = config
         self.scale = scale
         self.run_type = run_type
@@ -38,35 +38,26 @@ class GAOptimizer:
         self.tripinfo_output = tripinfo_output
         self.baseline_metrics = baseline_metrics
 
-        # Identify which intersections have traffic lights (hardcoded from your generator)
-        self.tls_intersections = [6, 7, 10, 11]
-        
-        # Each of the 4 intersections has 2 main phases (North-South, East-West)
-        # So, the chromosome length is 4 * 2 = 8
-        self.chromosome_length = len(self.tls_intersections) * 2
+        self.tls_ids = tls_ids
+        self.chromosome_length = len(self.tls_ids) * 2
+        print(f"   - GA initialized for {len(self.tls_ids)} traffic lights.")
+        print(f"   - Chromosome length: {self.chromosome_length}")
 
     def _create_individual(self):
         """Creates a random individual (chromosome)."""
         return [random.randint(GENE_MIN, GENE_MAX) for _ in range(self.chromosome_length)]
 
     def _run_simulation_for_fitness(self, individual):
-        """
-        Runs a SUMO simulation via a helper method and returns a multi-objective fitness score.
-        """
+        """Calculates the multi-objective fitness score."""
         current_metrics = self.get_metrics_for_individual(individual)
         
         if not current_metrics or current_metrics['completed_vehicles'] == 0:
             return 0
 
-        # 1. Normalize: Calculate improvement over baseline (higher is better)
-        # We add a small epsilon (1e-6) to avoid division by zero
         wait_improvement = (self.baseline_metrics['total_system_wait_time'] - current_metrics['total_system_wait_time']) / (self.baseline_metrics['total_system_wait_time'] + 1e-6)
-        
         travel_improvement = (self.baseline_metrics['avg_travel_time'] - current_metrics['avg_travel_time']) / (self.baseline_metrics['avg_travel_time'] + 1e-6)
 
-        # 2. Apply Weights: Combine the improvements into a single score
         fitness = 1.0 + (W_WAIT_TIME * wait_improvement) + (W_TRAVEL_TIME * travel_improvement)
-        
         return fitness
 
     def _selection(self, population, fitnesses):
@@ -97,24 +88,12 @@ class GAOptimizer:
 
     def get_metrics_for_individual(self, individual):
         """
-        A helper function that runs a simulation for a single individual
-        and returns the full metrics dictionary from parse_tripinfo.
+        Runs a simulation for a single individual by modifying TLS timings in real-time
+        and returns the full metrics dictionary.
         """
-        # 1. Generate the traffic light file for this specific individual
-        tls_file = os.path.join(self.sumo_dir, "city.add.xml")
-        generate_tls_file(
-            tls_file, 
-            self.tls_intersections, 
-            individual, 
-            self.config["yellow_phase_duration"],
-            self.config["all_red_duration"]
-        )
-
-        # 2. Generate the SUMO config to use this TLS file
         config_file = os.path.join(self.sumo_dir, "city.sumocfg")
-        generate_sumo_config(config_file, self.net_file, self.route_file, additional_files=[tls_file])
+        generate_sumo_config(config_file, self.net_file, self.route_file)
 
-        # 3. Run the simulation
         sumo_cmd = ["sumo", "-c", config_file, 
                     "--tripinfo-output", self.tripinfo_output,
                     "--junction-taz",
@@ -122,13 +101,29 @@ class GAOptimizer:
                     "--no-step-log", "true"]
         
         traci.start(sumo_cmd)
+        
+        for i, tls_id in enumerate(self.tls_ids):
+            logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
+            
+            green_phase_indices = []
+            for idx, phase in enumerate(logic.phases):
+                if 'g' in phase.state.lower() and len(green_phase_indices) < 2:
+                    green_phase_indices.append(idx)
+
+            if len(green_phase_indices) == 2:
+                green_duration_1 = individual[i * 2]
+                green_duration_2 = individual[i * 2 + 1]
+
+                logic.phases[green_phase_indices[0]].duration = green_duration_1
+                logic.phases[green_phase_indices[1]].duration = green_duration_2
+
+                traci.trafficlight.setProgramLogic(tls_id, logic)
+
         while traci.simulation.getMinExpectedNumber() > 0:
             traci.simulationStep()
         traci.close()
 
-        # 4. Parse and return the results dictionary
         return parse_tripinfo(self.tripinfo_output, self.config["simulation_time"])
-
     def run(self):
         """Runs the main genetic algorithm loop."""
         # 1. Initialization

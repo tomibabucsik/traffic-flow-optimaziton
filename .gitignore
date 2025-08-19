@@ -1,7 +1,9 @@
-venv/
 __pycache__/
 *.pyc
-*.pyo
-.DS_Store
-*.sumocfg
+
+sumo_files/
+trips.trips.xml
+
 output/
+
+venv/
