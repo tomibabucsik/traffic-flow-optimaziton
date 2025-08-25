@@ -11,10 +11,8 @@ class CityGraph:
     def add_road(self, start, end, length, speed_limit, lanes=1):
         """Add a road (edge) between intersections"""
 
-        # Calculate travel time in seconds (lenght in meters, speed_limit in km/h)
         travel_time = (length / (speed_limit / 3.6))
 
-        # Vehicles per lane per hour
         capacity = lanes * 1800
 
         self.graph.add_edge(

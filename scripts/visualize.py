@@ -10,35 +10,59 @@ from scenarios import SCENARIOS
 from city_modeling.builder import setup_grid_city, setup_arterial_road
 from city_modeling.graph_visualization import GraphVisualization
 
-def plot_metric(ax, data, metric, title, y_label):
-    data.plot(kind='bar', ax=ax, color=['#1f77b4', '#ff7f0e'], width=0.6)
-    ax.set_title(title, fontsize=16, fontweight='bold')
-    ax.set_ylabel(y_label, fontsize=12)
-    ax.set_xlabel('Traffic Scale Factor', fontsize=12)
+def plot_comparison(ax, data, metric, title, y_label):
+    """Helper function to plot a comparison bar chart for a single metric."""
+    colors = {'fixed': '#1f77b4', 'optimized': '#ff7f0e', 'adaptive': '#2ca02c'}
+    
+    plot_colors = [colors[col] for col in data.columns if col in colors]
+
+    data.plot(kind='bar', ax=ax, width=0.8, color=plot_colors)
+    ax.set_title(title, fontsize=14, fontweight='bold')
+    ax.set_ylabel(y_label, fontsize=10)
+    ax.set_xlabel('Algorithm Type', fontsize=10)
     ax.tick_params(axis='x', rotation=0, labelsize=10)
     ax.grid(axis='y', linestyle='--', alpha=0.7)
-    ax.legend(['Fixed Timings', 'GA Optimized'])
+    ax.legend(data.columns)
+
     for p in ax.patches:
-        ax.annotate(f"{p.get_height():.2f}", (p.get_x() + p.get_width() / 2., p.get_height()), ha='center', va='center', xytext=(0, 9), textcoords='offset points', fontsize=10)
+        ax.annotate(f"{p.get_height():.1f}",
+                    (p.get_x() + p.get_width() / 2., p.get_height()),
+                    ha='center', va='center', xytext=(0, 9), textcoords='offset points', fontsize=9)
 
 def create_dashboard(csv_file='output/results.csv'):
+    """
+    Reads the final, clean results and generates a comprehensive dashboard
+    comparing all algorithms across all scenarios.
+    """
     try:
         df = pd.read_csv(csv_file)
     except FileNotFoundError:
-        print(f"Error: The file '{csv_file}' was not found.")
+        print(f"Error: The file '{csv_file}' was not found. Please run the test suites first.")
         return
-    df_fixed = df[df['run_type'] == 'fixed'].groupby('scale_factor').last()
-    df_optimized = df[df['run_type'] == 'optimized'].groupby('scale_factor').last()
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7))
-    fig.suptitle('Genetic Algorithm vs. Fixed Timings Performance Dashboard', fontsize=22, fontweight='bold')
-    wait_time_data = pd.DataFrame({'Fixed': df_fixed['total_system_wait_time'], 'Optimized': df_optimized['total_system_wait_time']}).dropna()
-    plot_metric(axes[0], wait_time_data, 'total_system_wait_time', 'Overall Congestion', 'Total System Wait Time (s)')
-    avg_travel_time_data = pd.DataFrame({'Fixed': df_fixed['avg_travel_time'], 'Optimized': df_optimized['avg_travel_time']}).dropna()
-    plot_metric(axes[1], avg_travel_time_data, 'avg_travel_time', 'Average Vehicle Experience', 'Average Travel Time (s)')
-    plt.tight_layout(rect=[0, 0, 1, 0.95])
-    output_filename = 'output/ga_performance_dashboard.png'
+
+    scenarios = df['scenario_name'].unique()
+    
+    fig, axes = plt.subplots(len(scenarios), 2, figsize=(16, 6 * len(scenarios)), squeeze=False)
+    fig.suptitle('Performance Comparison', fontsize=24, fontweight='bold')
+
+    for i, scenario in enumerate(scenarios):
+        scenario_df = df[df['scenario_name'] == scenario]
+        
+        # Group all run types at once
+        last_runs = scenario_df.groupby(['scale_factor', 'run_type']).last().unstack()
+        
+        wait_time_data = last_runs['total_system_wait_time'][['fixed', 'optimized', 'adaptive']].dropna(how='all')
+        plot_comparison(axes[i, 0], wait_time_data, 'total_system_wait_time', f'{scenario}: Overall Congestion', 'Total Wait Time (s)')
+
+        travel_time_data = last_runs['avg_travel_time'][['fixed', 'optimized', 'adaptive']].dropna(how='all')
+        plot_comparison(axes[i, 1], travel_time_data, 'avg_travel_time', f'{scenario}: Vehicle Experience', 'Average Travel Time (s)')
+
+    plt.tight_layout(rect=[0, 0.03, 1, 0.96])
+    
+    output_filename = 'output/performance_dashboard.png'
     plt.savefig(output_filename)
     print(f"\nDashboard chart saved as '{output_filename}'")
+    
     plt.show()
 
 def plot_evolution(csv_file='output/results.csv'):

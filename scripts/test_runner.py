@@ -1,13 +1,16 @@
 import argparse
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from scenarios import SCENARIOS
 from simulation.run import run_fixed_experiment, run_ga_experiment, run_adaptive_experiment
 from config import CONFIG
 
-# --- Import necessary components for visualization ---
 from city_modeling.builder import setup_grid_city, setup_arterial_road
 from city_modeling.graph_visualization import GraphVisualization
 
-# A dictionary to map builder names from scenarios.py to the actual functions
 MAP_BUILDERS = {
     "setup_grid_city": setup_grid_city,
     "setup_arterial_road": setup_arterial_road,

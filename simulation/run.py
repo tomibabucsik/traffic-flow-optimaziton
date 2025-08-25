@@ -32,7 +32,6 @@ def setup_environment(config, scale):
 
     tripinfo_output = os.path.join(SUMO_DIR, "tripinfo.xml")
 
-    # Check if this is an imported map scenario
     if config.get("type") == "imported":
         print(f"   - Using imported map: {config['net_file']}")
 
@@ -46,7 +45,7 @@ def setup_environment(config, scale):
         shutil.copy(source_route_file, dest_route_file)
         route_file = dest_route_file
 
-    else: # It's a generated map scenario
+    else:
         print("   - Generating map from builder...")
         map_builder_func = MAP_BUILDERS[config['map_builder']]
         map_args = config['map_config']
@@ -144,7 +143,6 @@ def run_viewer(config, scale):
     Generates all necessary files for a scenario and launches the SUMO GUI
     for interactive viewing with default 'fixed' traffic light timings.
     """
-    # Use the centralized setup function to handle both generated and imported maps
     net_file, route_file, _ = setup_environment(config, scale)
     
     config_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.sumocfg")
@@ -154,7 +152,6 @@ def run_viewer(config, scale):
     print(f"\nLaunching SUMO GUI for scenario '{config['scenario_name']}'...")
     print("   Press 'Play' in the GUI to start the simulation.")
     
-    # Command to launch the GUI version of SUMO
     sumo_gui_cmd = ["sumo-gui", "-c", config_file, "--junction-taz"]
     
     try:

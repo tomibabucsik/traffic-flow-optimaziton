@@ -1,7 +1,13 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import argparse
 from scenarios import SCENARIOS
 from simulation.run import run_viewer
 from config import CONFIG
+
 
 def view_scenario(scenario_name, scale):
     """
@@ -14,13 +20,11 @@ def view_scenario(scenario_name, scale):
 
     scenario = SCENARIOS[scenario_name]
     
-    # Merge the global config with the specific scenario's settings
     full_config = CONFIG.copy()
     full_config.update(scenario)
 
     full_config['scenario_name'] = scenario_name
 
-    # If the user doesn't specify a scale, use the first one from the scenario's list
     if scale is None:
         scale = scenario['scales'][0]
 

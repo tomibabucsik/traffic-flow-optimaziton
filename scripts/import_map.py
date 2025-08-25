@@ -4,6 +4,8 @@ import sys
 import subprocess
 import requests
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 # --- Configuration ---
 MAPS_DIR = "map_assets"
 BUDAPEST_BBOX = "19.04,47.50,19.06,47.51" # coordinates from OSM
@@ -33,12 +35,12 @@ def import_and_prepare_map():
         sys.exit(f"Failed to download map data. Status code: {response.status_code}")
 
     # --- 2. Convert OSM Map to SUMO Network ---
-    print(f"\n--- 🔄 Converting map to SUMO format ---")
+    print(f"\n--- Converting map to SUMO format ---")
     netconvert_cmd = [
         "netconvert",
         "--osm-files", osm_file,
         "-o", net_file,
-        "--geometry.remove", # Helps clean up the geometry
+        "--geometry.remove",
         "--ramps.guess",
         "--junctions.join",
         "--tls.guess-signals",

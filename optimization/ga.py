@@ -12,9 +12,11 @@ POPULATION_SIZE = 10
 N_GENERATIONS = 20
 MUTATION_RATE = 0.3
 CROSSOVER_RATE = 0.8
+
 # Range for green light durations (e.g., 10 to 60 seconds)
 GENE_MIN = 10
 GENE_MAX = 60
+
 # Weights
 W_WAIT_TIME = 0.5
 W_TRAVEL_TIME = 0.5
@@ -139,7 +141,6 @@ class GAOptimizer:
             # 2. Evaluation
             fitnesses = [self._run_simulation_for_fitness(ind) for ind in population]
             
-            # Keep track of the best individual found so far
             current_best_fitness = max(fitnesses)
             if current_best_fitness > best_overall_fitness:
                 best_overall_fitness = current_best_fitness
@@ -150,16 +151,12 @@ class GAOptimizer:
 
             # 3. Evolution
             next_population = []
-            # Elitism: Keep the best individual from the last generation
             best_index = fitnesses.index(max(fitnesses))
             next_population.append(population[best_index])
 
             while len(next_population) < POPULATION_SIZE:
-                # Selection
                 parent1, parent2 = self._selection(population, fitnesses)
-                # Crossover
                 child1, child2 = self._crossover(parent1, parent2)
-                # Mutation
                 next_population.append(self._mutate(child1))
                 if len(next_population) < POPULATION_SIZE:
                     next_population.append(self._mutate(child2))
