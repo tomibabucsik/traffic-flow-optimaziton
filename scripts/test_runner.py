@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from scenarios import SCENARIOS
-from simulation.run import run_fixed_experiment, run_ga_experiment, run_adaptive_experiment
+from simulation.run import run_fixed_experiment, run_ga_experiment, run_adaptive_experiment, run_reactive_experiment
 from config import CONFIG
 
 from city_modeling.builder import setup_grid_city, setup_arterial_road
@@ -71,6 +71,8 @@ def run_test_suite(scenario_name):
                 run_ga_experiment(full_config, scale, run_type)
             elif run_type == "adaptive":
                 run_adaptive_experiment(full_config, scale, run_type)
+            elif run_type == "reactive":
+                run_reactive_experiment(full_config, scale, run_type)
 
     print(f"\n--- Test Suite for Scenario: {scenario_name} Finished ---")
 

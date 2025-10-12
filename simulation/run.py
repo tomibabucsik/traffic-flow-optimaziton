@@ -10,6 +10,7 @@ from .generator import (generate_node_file, generate_edge_file,
 from .analysis import parse_tripinfo, log_results
 from optimization.ga import GAOptimizer
 from optimization.adaptive import AdaptiveTrafficManager
+from optimization.reactive import ReactiveTrafficManager
 
 SUMO_DIR = "sumo_files"
 NETWORK_NAME = "city"
@@ -115,12 +116,37 @@ def run_ga_experiment(config, scale, run_type):
         if final_metrics:
             log_results(final_metrics, scale, run_type, config.get('scenario_name', 'default'))
 
+
+def run_reactive_experiment(config, scale, run_type):
+    net_file, route_file, tripinfo_output = setup_environment(config, scale)
+    config_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.sumocfg")
+    generate_sumo_config(config_file, net_file, route_file)
+
+    print(f"\nRunning Reactive (Queue-based) SUMO Experiment...")
+    sumo_cmd = ["sumo", "-c", config_file, "--tripinfo-output", tripinfo_output, "--junction-taz", "--no-warnings", "true", "--no-step-log", "true"]
+    traci.start(sumo_cmd)
+    
+    tls_ids = traci.trafficlight.getIDList()
+    reactive_manager = ReactiveTrafficManager(tls_ids, config)
+    
+    while traci.simulation.getMinExpectedNumber() > 0:
+        traci.simulationStep()
+        reactive_manager.step()
+
+    traci.close()
+    print("Simulation Finished.")
+    
+    results = parse_tripinfo(tripinfo_output, config["simulation_time"])
+    if results:
+        log_results(results, scale, run_type, config.get('scenario_name', 'default'))
+
+
 def run_adaptive_experiment(config, scale, run_type):
     net_file, route_file, tripinfo_output = setup_environment(config, scale)
     config_file = os.path.join(SUMO_DIR, f"{NETWORK_NAME}.sumocfg")
     generate_sumo_config(config_file, net_file, route_file)
 
-    print(f"\nRunning Adaptive V2X SUMO Experiment...")
+    print(f"\nRunning Predictive Adaptive (V2I-based) SUMO Experiment...")
     sumo_cmd = ["sumo", "-c", config_file, "--tripinfo-output", tripinfo_output, "--junction-taz", "--no-warnings", "true", "--no-step-log", "true"]
     traci.start(sumo_cmd)
     
@@ -137,6 +163,7 @@ def run_adaptive_experiment(config, scale, run_type):
     results = parse_tripinfo(tripinfo_output, config["simulation_time"])
     if results:
         log_results(results, scale, run_type, config.get('scenario_name', 'default'))
+
 
 def run_viewer(config, scale):
     """
