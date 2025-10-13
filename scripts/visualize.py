@@ -23,7 +23,7 @@ def create_dashboard(csv_file='output/results.csv', output_filename='output/perf
     latest_runs_df = df.drop_duplicates(subset=['scenario_name', 'run_type', 'scale_factor'], keep='last')
 
     scenarios = latest_runs_df['scenario_name'].unique()
-    algo_order = ['fixed', 'reactive', 'adaptive', 'optimized']
+    algo_order = ['fixed', 'reactive', 'adaptive', 'genetic']
     present_algos = [a for a in algo_order if a in latest_runs_df['run_type'].unique()]
 
     plt.style.use('seaborn-v0_8-whitegrid')

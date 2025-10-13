@@ -10,7 +10,7 @@ SCENARIOS = {
         "simulation_time": 450,
         "map_builder": "setup_grid_city",
         "map_config": {"rows": 4, "cols": 4},
-        "run_types": ["fixed", "optimized", "adaptive", "reactive"],
+        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
         "scales": [2.0, 4.0, 6.0]
     },
     "arterial_road": {
@@ -19,7 +19,7 @@ SCENARIOS = {
         "simulation_time": 900,
         "map_builder": "setup_arterial_road",
         "map_config": {"main_road_length": 5, "cross_streets": 3},
-        "run_types": ["fixed", "optimized", "adaptive", "reactive"],
+        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
         "scales": [2.0, 4.0, 6.0]
     },
     "budapest_downtown": {
@@ -28,7 +28,16 @@ SCENARIOS = {
         "simulation_time": 5400,
         "net_file": "assets/maps/budapest_downtown.net.xml",
         "route_file": "assets/maps/budapest_downtown.rou.xml",
-        "run_types": ["fixed", "optimized", "adaptive", "reactive"],
+        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
+        "scales": [1.0]
+    },
+    "kalocsa": {
+        "description": "A real-world map section from Kalocsa.",
+        "type": "imported",
+        "simulation_time": 5400,
+        "net_file": "assets/maps/kalocsa.net.xml",
+        "route_file": "assets/maps/kalocsa.rou.xml",
+        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
         "scales": [1.0]
     }
 }

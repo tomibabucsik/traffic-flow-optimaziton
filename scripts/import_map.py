@@ -8,8 +8,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- Configuration ---
 MAPS_DIR = "map_assets"
-BUDAPEST_BBOX = "19.04,47.50,19.06,47.51" # coordinates from OSM
-SCENARIO_NAME = "budapest_downtown"
+BBOX = BBOX = "18.970,46.515,19.000,46.535" # coordinates from OSM
+SCENARIO_NAME = "kalocsa"
 # -------------------
 
 def import_and_prepare_map():
@@ -25,7 +25,7 @@ def import_and_prepare_map():
 
     # --- 1. Download Map Data from OpenStreetMap ---
     print(f"--- Downloading map data for '{SCENARIO_NAME}' ---")
-    osm_api_url = f"https://api.openstreetmap.org/api/0.6/map?bbox={BUDAPEST_BBOX}"
+    osm_api_url = f"https://api.openstreetmap.org/api/0.6/map?bbox={BBOX}"
     response = requests.get(osm_api_url)
     if response.status_code == 200:
         with open(osm_file, 'wb') as f:

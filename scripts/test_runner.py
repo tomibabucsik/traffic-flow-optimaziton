@@ -58,6 +58,10 @@ def run_test_suite(scenario_name):
             full_config.update(scenario)
             full_config['scenario_name'] = scenario_name
 
+            base_time = scenario["simulation_time"]
+            scaled_time = int(base_time * scale)
+            full_config["simulation_time"] = scaled_time
+
             if scenario.get("type") == "generated":
                 full_config['map_builder'] = scenario['map_builder']
                 full_config['map_config'] = scenario['map_config']
@@ -67,7 +71,7 @@ def run_test_suite(scenario_name):
 
             if run_type == "fixed":
                 run_fixed_experiment(full_config, scale, run_type)
-            elif run_type == "optimized":
+            elif run_type == "genetic":
                 run_ga_experiment(full_config, scale, run_type)
             elif run_type == "adaptive":
                 run_adaptive_experiment(full_config, scale, run_type)
