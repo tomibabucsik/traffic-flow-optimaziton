@@ -22,22 +22,13 @@ SCENARIOS = {
         "run_types": ["fixed", "genetic", "adaptive", "reactive"],
         "scales": [2.0, 4.0, 6.0]
     },
-    "budapest_downtown": {
-        "description": "A real-world map section from downtown Budapest.",
-        "type": "imported",
-        "simulation_time": 5400,
-        "net_file": "assets/maps/budapest_downtown.net.xml",
-        "route_file": "assets/maps/budapest_downtown.rou.xml",
-        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
-        "scales": [1.0]
-    },
     "kalocsa": {
         "description": "A real-world map section from Kalocsa.",
         "type": "imported",
-        "simulation_time": 5400,
+        "simulation_time": 1200,
         "net_file": "assets/maps/kalocsa.net.xml",
         "route_file": "assets/maps/kalocsa.rou.xml",
-        "run_types": ["fixed", "genetic", "adaptive", "reactive"],
+        "run_types": ["reactive"],
         "scales": [1.0]
     }
 }

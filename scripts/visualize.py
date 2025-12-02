@@ -138,6 +138,60 @@ def create_dashboard(csv_file='output/results.csv', output_filename='output/perf
 
     print("\nAll scenario trend plots saved successfully.")
 
+def plot_kalocsa_comparison(csv_file='output/results.csv', output_filename='output/kalocsa_comparison.png'):
+    """
+    Generates a comparative bar chart for the Kalocsa scenario (single-scale analysis).
+    Compares algorithms across key performance metrics.
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import os
+
+    df = pd.read_csv(csv_file)
+    kalocsa_df = df[df['scenario_name'] == 'kalocsa']
+
+    if kalocsa_df.empty:
+        print("No Kalocsa data found in the CSV. Skipping comparison chart.")
+        return
+
+    metrics = ['avg_travel_time', 'avg_wait_time', 'throughput_vpm', 'total_system_wait_time']
+    titles = [
+        'Average Travel Time (s)',
+        'Average Wait Time (s)',
+        'Throughput (veh/min)',
+        'Total System Wait Time (s)'
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+    axes = axes.flatten()
+    plt.style.use('seaborn-v0_8-whitegrid')
+    sns.set_palette("viridis")
+
+    for i, metric in enumerate(metrics):
+        sns.barplot(
+            data=kalocsa_df,
+            x='run_type', y=metric,
+            palette='viridis', ax=axes[i]
+        )
+        axes[i].set_title(f'Kalocsa — {titles[i]}', fontsize=14, fontweight='bold')
+        axes[i].set_xlabel('')
+        axes[i].tick_params(axis='x', rotation=0)
+        axes[i].set_ylabel('')
+        
+        for p in axes[i].patches:
+            axes[i].annotate(f'{p.get_height():.0f}',
+                             (p.get_x() + p.get_width() / 2., p.get_height()),
+                             ha='center', va='bottom', fontsize=9, color='black', xytext=(0, 3),
+                             textcoords='offset points')
+
+    plt.suptitle("Kalocsa — Algorithm Performance Comparison", fontsize=20, fontweight='bold')
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+
+    os.makedirs(os.path.dirname(output_filename), exist_ok=True)
+    plt.savefig(output_filename, dpi=300, bbox_inches='tight')
+    print(f"Kalocsa comparison chart saved to '{output_filename}'")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Generate a performance dashboard from simulation results.")
@@ -146,4 +200,5 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     create_dashboard(csv_file=args.csv_file, output_filename=args.output_file)
+    plot_kalocsa_comparison(csv_file=args.csv_file, output_filename='output/kalocsa_comparison.png')
     plt.show()

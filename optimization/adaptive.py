@@ -11,12 +11,21 @@ class AdaptiveTrafficManager:
     "arrival pressure" based logic using V2I data.
     """
     def __init__(self, tls_ids, config):
-        self.config = config
-        
+        self.config = config or {}
         self.prediction_window = self.config.get("adaptive_prediction_window", PREDICTION_TIME_WINDOW)
+        self.lookahead_edges = int(self.config.get("adaptive_lookahead_edges", 5))
+        self.max_vehicles_to_process = int(self.config.get("adaptive_max_vehicles", 0))
+        self.log_interval = int(self.config.get("adaptive_log_interval", 300))
         
         self.tls_states = {}
         self.controllable_tls_ids = []
+
+        self.controlled_edges = set()
+
+        self._edge_travel_time_cache = {}
+        self._last_cache_time = None
+
+        self._last_log_time = -1
 
         print("--- Initializing Predictive Adaptive Traffic Manager ---")
         for tls_id in tls_ids:
@@ -35,7 +44,10 @@ class AdaptiveTrafficManager:
                         if green_idx + 1 < len(logic.phases):
                             yellow_phases.append(green_idx + 1)
                         else:
-                            yellow_phases.append(0) 
+                            yellow_phases.append(0)
+
+                    lanes_p1 = self._get_lanes_for_phase(tls_id, green_phases[0])
+                    lanes_p2 = self._get_lanes_for_phase(tls_id, green_phases[1])
 
                     self.controllable_tls_ids.append(tls_id)
                     
@@ -43,10 +55,18 @@ class AdaptiveTrafficManager:
                         'time_in_current_phase': 0,
                         'green_phases': green_phases[:2],
                         'yellow_phases': yellow_phases[:2],
-                        'lanes_p1': self._get_lanes_for_phase(tls_id, green_phases[0]),
-                        'lanes_p2': self._get_lanes_for_phase(tls_id, green_phases[1])
+                        'lanes_p1': lanes_p1,
+                        'lanes_p2': lanes_p2
                     }
-                    print(f"  '{tls_id}' is controllable. Phase 1 lanes: {self.tls_states[tls_id]['lanes_p1']}, Phase 2 lanes: {self.tls_states[tls_id]['lanes_p2']}")
+
+                    for lane in lanes_p1 + lanes_p2:
+                        try:
+                            edge_id = traci.lane.getEdgeID(lane)
+                            self.controlled_edges.add(edge_id)
+                        except traci.TraCIException:
+                            continue
+
+                    print(f"  '{tls_id}' is controllable. Phase 1 lanes: {lanes_p1}, Phase 2 lanes: {lanes_p2}")
                 else:
                     print(f"  '{tls_id}' is not controllable (less than 2 green phases). Ignoring.")
 
@@ -54,81 +74,156 @@ class AdaptiveTrafficManager:
                 print(f"  Could not process logic for '{tls_id}'. Ignoring.")
         
         print(f"--- Predictive control enabled for {len(self.controllable_tls_ids)} intersections. ---")
+        print(f"--- Controlled edges count: {len(self.controlled_edges)} ---")
+        if self.max_vehicles_to_process > 0:
+            print(f"--- Vehicle processing limited to {self.max_vehicles_to_process} vehicles per step ---")
 
     def _get_lanes_for_phase(self, tls_id, phase_index):
-        """Helper to get all incoming lanes that are green during a specific phase."""
+        """Return list of incoming lane IDs that are green during a specific phase."""
         links = traci.trafficlight.getControlledLinks(tls_id)
         logic = traci.trafficlight.getAllProgramLogics(tls_id)[0]
         phase_state = logic.phases[phase_index].state
         
-        green_lanes = set()
-        if not links: return []
+        green_lanes = []
+        if not links:
+            return green_lanes
 
         for i in range(len(phase_state)):
             if phase_state[i].lower() == 'g':
-                if i < len(links):
+                if i < len(links) and links[i]:
                     incoming_lane = links[i][0][0]
-                    green_lanes.add(incoming_lane)
-        return list(green_lanes)
+                    green_lanes.append(incoming_lane)
+        return list(dict.fromkeys(green_lanes))
 
-    def _calculate_arrival_pressure(self, tls_id):
+    def _refresh_edge_cache_if_needed(self, sim_time):
         """
-        Calculates the "arrival pressure" for the two controlled phases of a TLS
-        by estimating the arrival time of all vehicles in the network.
+        Cache edge traveltimes for the current simulation time so we don't call
+        traci.edge.getTraveltime(...) repeatedly for the same edge within a step.
+        """
+        if self._last_cache_time == sim_time:
+            return
+        self._edge_travel_time_cache.clear()
+        for edge_id in list(self.controlled_edges):
+            try:
+                self._edge_travel_time_cache[edge_id] = traci.edge.getTraveltime(edge_id)
+            except traci.TraCIException:
+                continue
+        self._last_cache_time = sim_time
+
+    def _get_edge_traveltime_cached(self, edge_id):
+        return self._edge_travel_time_cache.get(edge_id, None)
+
+    def _calculate_arrival_pressure(self, tls_id, sim_time):
+        """
+        Calculates the arrival pressure for the two controlled phases of a TLS.
+        Optimized to only examine relevant vehicles and use cached traveltimes.
         """
         state = self.tls_states[tls_id]
-        pressure = [0, 0] 
-        
-        all_vehicle_ids = traci.vehicle.getIDList()
+        pressure = [0, 0]
 
-        for veh_id in all_vehicle_ids:
+        self._refresh_edge_cache_if_needed(sim_time)
+
+        all_vehicle_ids = traci.vehicle.getIDList()
+        total_vehicles = len(all_vehicle_ids)
+
+        if self.max_vehicles_to_process > 0 and total_vehicles > self.max_vehicles_to_process:
+            import random
+            sampled = random.sample(all_vehicle_ids, self.max_vehicles_to_process)
+            vehicle_iter = sampled
+        else:
+            vehicle_iter = all_vehicle_ids
+
+        controlled_edges_local = self.controlled_edges
+        lookahead = self.lookahead_edges
+        pred_window = self.prediction_window
+
+        for veh_id in vehicle_iter:
             try:
                 route_edges = traci.vehicle.getRoute(veh_id)
                 current_edge = traci.vehicle.getRoadID(veh_id)
-
-                if not current_edge or current_edge not in route_edges:
+                if not current_edge or not route_edges:
                     continue
-                
-                current_index = route_edges.index(current_edge)
-                
-                estimated_travel_time = 0
-                
-                for i, edge_id in enumerate(route_edges[current_index:]):
+
+                try:
+                    current_index = route_edges.index(current_edge)
+                except ValueError:
+                    continue
+
+                route_slice = route_edges[current_index: current_index + lookahead]
+
+                if not any(edge in controlled_edges_local for edge in route_slice):
+                    continue
+
+                estimated_travel_time = 0.0
+
+                for i, edge_id in enumerate(route_slice):
                     if i == 0:
-                        # --- FIX #2: Replaced incorrect function calls with the correct TraCI API. ---
                         lane_id = traci.vehicle.getLaneID(veh_id)
-                        lane_length = traci.lane.getLength(lane_id)
-                        pos_on_lane = traci.vehicle.getLanePosition(veh_id) # Correct function
-                        speed = traci.vehicle.getSpeed(veh_id)
-                        time_to_end_of_edge = (lane_length - pos_on_lane) / speed if speed > 0.1 else float('inf')
-                        estimated_travel_time += time_to_end_of_edge
-                    else:
-                        estimated_travel_time += traci.edge.getTraveltime(edge_id)
-                    
-                    for lane in state['lanes_p1']:
-                        if traci.lane.getEdgeID(lane) == edge_id:
-                            if estimated_travel_time <= self.prediction_window:
-                                pressure[0] += 1
-                            break
-                    else:
-                        for lane in state['lanes_p2']:
-                            if traci.lane.getEdgeID(lane) == edge_id:
-                                if estimated_travel_time <= self.prediction_window:
-                                    pressure[1] += 1
-                                break
-                        else:
+                        if not lane_id:
                             continue
-                    break 
-            
+                        lane_length = traci.lane.getLength(lane_id)
+                        pos_on_lane = traci.vehicle.getLanePosition(veh_id)
+                        speed = traci.vehicle.getSpeed(veh_id)
+                        if speed is None:
+                            speed = 0.0
+                        if speed > 0.1:
+                            time_to_end = (lane_length - pos_on_lane) / speed
+                        else:
+                            cached_tt = self._get_edge_traveltime_cached(edge_id=route_edges[0]) if route_edges else None
+                            time_to_end = cached_tt if cached_tt is not None else float('inf')
+                        estimated_travel_time += time_to_end
+                    else:
+                        cached_tt = self._get_edge_traveltime_cached(edge_id)
+                        if cached_tt is not None:
+                            estimated_travel_time += cached_tt
+                        else:
+                            try:
+                                estimated_travel_time += traci.edge.getTraveltime(edge_id)
+                            except traci.TraCIException:
+                                estimated_travel_time += 0.0
+
+                    if estimated_travel_time > pred_window:
+                        break
+
+                    for lane in state['lanes_p1']:
+                        try:
+                            lane_edge = traci.lane.getEdgeID(lane)
+                        except traci.TraCIException:
+                            continue
+                        if lane_edge == edge_id and estimated_travel_time <= pred_window:
+                            pressure[0] += 1
+                            raise StopIteration
+
+                    for lane in state['lanes_p2']:
+                        try:
+                            lane_edge = traci.lane.getEdgeID(lane)
+                        except traci.TraCIException:
+                            continue
+                        if lane_edge == edge_id and estimated_travel_time <= pred_window:
+                            pressure[1] += 1
+                            raise StopIteration
+
+            except StopIteration:
+                continue
             except traci.TraCIException:
                 continue
-        
+
         return pressure
 
     def step(self):
         """
         Called at each simulation step to update traffic light logic based on arrival pressure.
+        This method contains light-weight guards & logging so long predictive runs show progress.
         """
+        sim_time = traci.simulation.getTime()
+        if self._last_log_time < 0 or (sim_time - self._last_log_time) >= self.log_interval:
+            try:
+                active_veh = len(traci.vehicle.getIDList())
+            except traci.TraCIException:
+                active_veh = -1
+            print(f"[Adaptive] sim_time={sim_time}, active_veh={active_veh}, controllable_tls={len(self.controllable_tls_ids)}")
+            self._last_log_time = sim_time
+
         for tls_id in self.controllable_tls_ids:
             state = self.tls_states[tls_id]
             state['time_in_current_phase'] += 1
@@ -136,9 +231,12 @@ class AdaptiveTrafficManager:
             if state['time_in_current_phase'] < MIN_GREEN_TIME:
                 continue
 
-            pressure_p1, pressure_p2 = self._calculate_arrival_pressure(tls_id)
+            pressure_p1, pressure_p2 = self._calculate_arrival_pressure(tls_id, sim_time)
 
-            current_phase = traci.trafficlight.getPhase(tls_id)
+            try:
+                current_phase = traci.trafficlight.getPhase(tls_id)
+            except traci.TraCIException:
+                continue
 
             is_phase1_green = current_phase == state['green_phases'][0]
             is_phase2_green = current_phase == state['green_phases'][1]
@@ -151,8 +249,7 @@ class AdaptiveTrafficManager:
 
     def _switch_to_phase(self, tls_id, current_green_index):
         """
-        Handles the transition by setting the appropriate yellow phase.
-        `current_green_index` is 0 if phase 1 was green, 1 if phase 2 was green.
+        Sets the yellow phase that follows the currently green index.
         """
         state = self.tls_states[tls_id]
         yellow_phase_to_set = state['yellow_phases'][current_green_index]
@@ -162,5 +259,5 @@ class AdaptiveTrafficManager:
             if current_actual_phase in state['green_phases']:
                 traci.trafficlight.setPhase(tls_id, yellow_phase_to_set)
                 state['time_in_current_phase'] = 0
-        except traci.TraCIException as e:
+        except traci.TraCIException:
             pass
